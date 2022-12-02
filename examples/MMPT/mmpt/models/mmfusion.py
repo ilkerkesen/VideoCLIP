@@ -63,23 +63,44 @@ class MMPTModel(nn.Module):
         self.video_encoder = video_encoder
         self.model = model
 
-    def forward(self, video_frames, caps, cmasks, return_score=False):
+    def extract_video_features(self, video_frames):
         bsz = video_frames.size(0)
         assert bsz == 1, "only bsz=1 is supported now."
+        device = video_frames.device
         seq_len = video_frames.size(1)
         video_frames = video_frames.view(-1, *video_frames.size()[2:])
         vfeats = self.video_encoder(video_frames.permute(0, 4, 1, 2, 3))
         vfeats = vfeats['video_embedding']
         vfeats = vfeats.view(bsz, seq_len, vfeats.size(-1))
-        padding = torch.zeros(
-            bsz, self.max_video_len - seq_len, vfeats.size(-1))
-        vfeats = torch.cat([vfeats, padding], dim=1)
-        vmasks = torch.cat([
-            torch.ones((bsz, seq_len), dtype=torch.bool),
-            torch.zeros((bsz, self.max_video_len - seq_len), dtype=torch.bool)
-            ],
-            dim=1
-        )
+        if seq_len >= self.max_video_len:
+            vmasks = torch.ones((bsz, seq_len), dtype=torch.bool).to(device)
+        else:
+            padding = torch.zeros(
+                bsz, self.max_video_len - seq_len, vfeats.size(-1))
+            padding = padding.to(device)
+            vfeats = torch.cat([vfeats, padding], dim=1)
+            vmasks = torch.cat([
+                torch.ones((bsz, seq_len), dtype=torch.bool),
+                torch.zeros(
+                    (bsz, self.max_video_len - seq_len),
+                    dtype=torch.bool)
+            ], dim=1).to(vfeats.device)
+        return vfeats, vmasks
+
+    def forward(
+        self,
+        caps,
+        cmasks,
+        vframes=None,
+        vfeats=None,
+        vmasks=None,
+        return_score=False,
+    ):
+        if vframes is not None:
+            assert vfeats is None and vmasks is None
+            vfeats, vmasks = self.extract_video_features(vframes)
+        else:
+            assert vfeats is not None and vmasks is not None
         output = self.model(caps, cmasks, vfeats, vmasks)
         if return_score:
             output = {"score": torch.bmm(
