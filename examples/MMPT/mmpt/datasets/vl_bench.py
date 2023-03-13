@@ -45,6 +45,7 @@ class Dataset_v1(Dataset):
         num_frames=None,
         youtube_dir=None,
         quva_dir=None,
+        something_something_dir=None,
         device='cuda:0',
         **kwargs,
     ):
@@ -62,25 +63,38 @@ class Dataset_v1(Dataset):
         if quva_dir is not None:
             self.quva_dir = process_path(quva_dir)
 
+        self.something_something_dir = None
+        if something_something_dir is not None:
+            self.something_something_dir = process_path(something_something_dir)
+
         self.device = device
 
     def _read_video(self, item):
         # find the full path
         dataset = item['dataset']
         video_file = item['video_file']
-        normalized = item.get('normalized')
-        assert normalized
+        video_path = None
         if dataset == 'QUVA':
+            normalized = item.get('normalized')
+            assert normalized
             video_dir = osp.join(self.quva_dir, 'normalized_videos')
+            video_path = osp.join(video_dir, video_file)
+        elif dataset == 'something-something-v2':
+            video_dir = self.something_something_dir
+            video_path = osp.join(video_dir, f'{item["dataset_idx"]}.webm')
         else:
             raise NotImplementedError('Not implemented yet.')
-        video_path = osp.join(video_dir, video_file)
+
+        start_pts = item.get('start_time')
+        end_pts = item.get('end_time', -1)
+        end_pts = end_pts if end_pts != -1 else None
 
         if item['time_unit'] == 'sec':
+            end_pts = float(end_pts) if end_pts is not None else None
             video = read_video(
                 video_path,
-                start_pts=float(item['start_time']),
-                end_pts=float(item['end_time']),
+                start_pts=float(start_pts),
+                end_pts=end_pts,
                 pts_unit='sec',
                 output_format='TCHW',
             )[0]
