@@ -1,12 +1,11 @@
 import torch
-from torchvision.io import read_video
-from math import ceil
+import json
 import click
 from tqdm import tqdm
 from torchvision.transforms import CenterCrop
 
 from mmpt.models import MMPTModel
-from mmpt.datasets.vl_bench import Dataset_v1
+from mmpt.datasets.vl_bench import Dataset_v1, process_path
 from scripts.video_feature_extractor.preprocessing import Preprocessing
 
 
@@ -37,12 +36,27 @@ def tokenize(aligner, tokenizer, text, device):
     required=True,
 )
 @click.option(
+    '--something-something-dir',
+    type=click.Path(exists=True, dir_okay=True),
+    required=True,
+)
+@click.option(
     '--device',
     type=str,
     default='cuda:0' if torch.cuda.is_available() else 'cpu',
 )
-def main(json_path, quva_dir, device):
-    data = Dataset_v1(json_path, quva_dir=quva_dir, device=device)
+@click.option(
+    '-o', '--output-file',
+    type=click.Path(file_okay=True),
+    required=True,
+)
+def main(json_path, quva_dir, something_something_dir, device, output_file):
+    data = Dataset_v1(
+        json_path,
+        quva_dir=quva_dir,
+        something_something_dir=something_something_dir,
+        device=device,
+    )
     preprocessor = Preprocessing('s3d')
     crop = CenterCrop(IMAGE_SIZE)
 
@@ -51,18 +65,18 @@ def main(json_path, quva_dir, device):
     model = model.to(device)
     model.eval()
     _tokenize = lambda text: tokenize(aligner, tokenizer, text, device)
+    results = dict()
 
-    correct = 0
-    numbers = []
     for item in tqdm(data):
         vframes = preprocessor(crop(item['video']))
         vframes = vframes.permute(0, 2, 3, 4, 1).unsqueeze(0)
         vframes = vframes.to(device)
         caption = _tokenize(item['caption'])
         foils = [_tokenize(foil) for foil in item['foils']]
+        item_scores = list()
 
         with torch.no_grad():
-            vfeats, vmasks = model.extract_video_features(vframes)            
+            vfeats, vmasks = model.extract_video_features(vframes)
             caption_s = model(
                 caption[0],
                 caption[1],
@@ -70,8 +84,8 @@ def main(json_path, quva_dir, device):
                 vmasks=vmasks,
                 return_score=True,
             )['score'].item()
+            item_scores.append(caption_s)
 
-            max_foil_s = float('-Inf')
             for foil in foils:
                 foil_s = model(
                     foil[0],
@@ -80,18 +94,13 @@ def main(json_path, quva_dir, device):
                     vmasks=vmasks,
                     return_score=True,
                 )['score'].item()
+                item_scores.append(foil_s)
 
-                if foil_s > max_foil_s:
-                    max_foil_s = foil_s
+        results[item['item_id']] = dict()
+        results[item['item_id']]['scores'] = item_scores
 
-                if max_foil_s > caption_s:
-                    break
-
-            if caption_s > max_foil_s:
-                correct += 1
-
-    accuracy = round(100 * correct / len(data), 2)
-    print(f'accuracy={accuracy}%')
+    with open(process_path(output_file), 'w') as f:
+        json.dump(results, f, indent=4)
 
 
 if __name__ == "__main__":
