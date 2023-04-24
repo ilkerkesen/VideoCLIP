@@ -50,12 +50,17 @@ def tokenize(aligner, tokenizer, text, device):
     type=click.Path(file_okay=True),
     required=True,
 )
-def main(json_path, quva_dir, something_something_dir, device, output_file):
+@click.option(
+    '--proficiency',
+    is_flag=True,
+)
+def main(json_path, quva_dir, something_something_dir, device, output_file, proficiency):
     data = Dataset_v1(
         json_path,
         quva_dir=quva_dir,
         something_something_dir=something_something_dir,
         device=device,
+        proficiency=proficiency,
     )
     preprocessor = Preprocessing('s3d')
     crop = CenterCrop(IMAGE_SIZE)

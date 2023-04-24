@@ -47,6 +47,7 @@ class Dataset_v1(Dataset):
         quva_dir=None,
         something_something_dir=None,
         device='cuda:0',
+        proficiency=False,
         **kwargs,
     ):
         self.json_data = BaseDataset(json_path)
@@ -68,6 +69,7 @@ class Dataset_v1(Dataset):
             self.something_something_dir = process_path(something_something_dir)
 
         self.device = device
+        self.proficiency = proficiency
 
     def _read_video(self, item):
         # find the full path
@@ -109,7 +111,8 @@ class Dataset_v1(Dataset):
     def __getitem__(self, index):
         entry = deepcopy(self.json_data[index])
         video = self._read_video(entry)
-        raw_texts = [entry['caption']] + entry['foils']
+        subentry = entry if not self.proficiency else entry['proficiency']
+        raw_texts = [subentry['caption']] + subentry['foils']
 
         item = {
             'index': index,
