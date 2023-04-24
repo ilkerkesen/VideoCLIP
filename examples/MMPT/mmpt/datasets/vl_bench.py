@@ -118,7 +118,7 @@ class Dataset_v1(Dataset):
             'index': index,
             'item_id': self.json_data.ids[index],
             'video': video,
-            'caption': entry['caption'],
-            'foils': entry['foils'],
+            'caption': raw_texts[0],
+            'foils': raw_texts[1:],
         }
         return item
