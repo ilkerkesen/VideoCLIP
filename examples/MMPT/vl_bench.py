@@ -41,6 +41,11 @@ def tokenize(aligner, tokenizer, text, device):
     required=True,
 )
 @click.option(
+    '--youtube-dir',
+    type=click.Path(exists=True, dir_okay=True),
+    required=True,
+)
+@click.option(
     '--device',
     type=str,
     default='cuda:0' if torch.cuda.is_available() else 'cpu',
@@ -54,11 +59,20 @@ def tokenize(aligner, tokenizer, text, device):
     '--proficiency',
     is_flag=True,
 )
-def main(json_path, quva_dir, something_something_dir, device, output_file, proficiency):
+def main(
+    json_path,
+    quva_dir,
+    something_something_dir,
+    youtube_dir,
+    device,
+    output_file,
+    proficiency,
+):
     data = Dataset_v1(
         json_path,
         quva_dir=quva_dir,
         something_something_dir=something_something_dir,
+        youtube_dir=youtube_dir,
         device=device,
         proficiency=proficiency,
     )
