@@ -1,4 +1,4 @@
-name: fairseq1
+name: video-clip
 channels:
   - pytorch
   - conda-forge
